@@ -1,0 +1,10 @@
+{
+  "name": "cholab-graphpad",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Browser-only publication graph and RT-qPCR calculator",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/*.test.cjs"
+  }
+}

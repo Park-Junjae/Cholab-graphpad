@@ -2,7 +2,7 @@
 
 ## 바로 실행
 
-[Cholab GraphPad 열기](https://best916116-crypto.github.io/Cholab-graphpad/)
+[Cholab GraphPad 열기](https://Park-Junjae.github.io/Cholab-graphpad/)
 
 위 링크를 누르면 설치 없이 브라우저에서 바로 열립니다.
 
@@ -10,7 +10,7 @@ Cholab GraphPad는 일반 실험 데이터를 우선으로 자동 인식해 그�
 
 ## 빠른 시작
 
-1. [Cholab GraphPad 열기](https://best916116-crypto.github.io/Cholab-graphpad/)를 누릅니다.
+1. [Cholab GraphPad 열기](https://Park-Junjae.github.io/Cholab-graphpad/)를 누릅니다.
 2. 기본으로 열리는 `일반 그래프` 탭에서 시작합니다. qPCR 데이터가 필요할 때만 `qPCR` 탭을 선택합니다.
 3. XLSX/CSV/TSV 파일을 업로드하거나 표를 붙여넣습니다.
 4. 오른쪽 `미리보기`에서 그래프를 확인합니다.
@@ -48,6 +48,20 @@ Cholab GraphPad는 일반 실험 데이터를 우선으로 자동 인식해 그�
 ## qPCR 그래프
 
 qPCR 탭은 장비에서 export한 raw table을 받아 relative expression 그래프를 만듭니다.
+
+지원 입력:
+
+- Raw well-level CSV/XLSX: `Well`, `Target`, `Sample`, `Ct` 또는 `Cq`
+- Ct/Cq 별칭: `Mean Ct`, `Mean Cq`, `Mean Equivalent Cq`, `Mean Adjusted Equivalent Cq`와 Ct 대응 이름
+- QuantStudio `Sample Results`: `Sample Name`, `Target Name`, cycle mean 컬럼
+- QuantStudio CSV의 `#` metadata 줄과 trailing empty column 자동 처리
+
+QuantStudio `Sample Results`의 `-B1`, `-B2`, `-B3` suffix는 biological replicate로 사용합니다. Technical replicate는 cycle mean에 이미 요약된 것으로 처리합니다. `Biogroup Results`는 replicate가 이미 합쳐진 summary이므로 biological replicate dot 계산에는 사용할 수 없습니다.
+
+계산은 comparative Cq 방식인 `2^-ΔΔCq`를 사용합니다. 이 방식은 target/reference assay의 증폭 효율이 충분히 유사하다는 가정이 필요합니다. 효율 차이가 큰 assay에는 efficiency-corrected 분석을 사용해야 합니다.
+
+- Livak & Schmittgen, 2001: <https://pubmed.ncbi.nlm.nih.gov/11846609/>
+- MIQE guidelines: <https://pubmed.ncbi.nlm.nih.gov/19246619/>
 
 기본 컬럼 예시:
 
@@ -98,4 +112,15 @@ A3      IL6       Control_1  26.4
 - `CSV`: 그래프에 사용된 표 데이터
 - `XLSX`: summary, 계산 상세, warning note가 포함된 엑셀 파일
 
-Plotly와 SheetJS는 `vendor/`에 포함되어 있어 GitHub Pages 링크를 열면 별도 설치 없이 그래프와 엑셀 업로드 기능을 사용할 수 있습니다.
+Plotly와 SheetJS는 버전이 고정된 CDN 파일을 사용합니다. GitHub Pages 링크를 열면 별도 설치 없이 그래프와 엑셀 업로드 기능을 사용할 수 있지만 인터넷 연결은 필요합니다.
+
+## 개발과 배포 파일 생성
+
+유지보수 원본은 `src/`에 있습니다. `src/index.html`과 `src/qpcr-core.js`를 수정한 뒤 아래 명령으로 테스트와 GitHub Pages용 payload를 생성합니다.
+
+```bash
+npm test
+npm run build
+```
+
+`npm run build`는 `src/index.html`을 gzip/Base64 payload로 만들고 `index.html`, `qpcr-core.js`, `payload/chunk-*.js`를 갱신합니다. 생성된 payload를 직접 수정하지 마세요.

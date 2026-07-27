@@ -4,5 +4,14 @@
 !README.md
 !.gitignore
 !.nojekyll
+!package.json
+!qpcr-core.js
 !payload/
 !payload/*.js
+!scripts/
+!scripts/*.mjs
+!src/
+!src/*.html
+!src/*.js
+!tests/
+!tests/*.cjs
