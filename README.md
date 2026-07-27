@@ -58,12 +58,75 @@ qPCR 탭은 장비에서 export한 raw table을 받아 relative expression 그�
 
 QuantStudio `Sample Results`의 `-B1`, `-B2`, `-B3` suffix는 biological replicate로 사용합니다. Technical replicate는 cycle mean에 이미 요약된 것으로 처리합니다. `Biogroup Results`는 QuantStudio가 계산한 `Rq`, `Rq Min`, `Rq Max`를 aggregate 그래프로 표시하지만, replicate가 이미 합쳐진 summary이므로 biological replicate dot이나 SD/SEM 계산에는 사용할 수 없습니다.
 
+### qPCR 계산식과 집계 기준
+
+#### Sample Results와 raw Ct/Cq
+
+각 target `g`, sample `s`, biological replicate `b`에 대해 다음 순서로 계산합니다.
+
+```text
+ΔCq(g,s,b)  = Cq(target,g,s,b) - Cq(reference,s,b)
+
+calibrator mean ΔCq(g)
+             = calibrator biological replicate들의 ΔCq 산술평균
+
+ΔΔCq(g,s,b) = ΔCq(g,s,b) - calibrator mean ΔCq(g)
+
+RE(g,s,b)   = 2^(-ΔΔCq(g,s,b))
+```
+
+- Raw well-level 입력은 먼저 동일 biological replicate 안의 technical replicate Cq를 평균합니다.
+- QuantStudio Sample Results는 technical replicate가 cycle mean에 이미 요약된 것으로 간주합니다.
+- 기본 cycle 컬럼 우선순위는 `Mean Adjusted Equivalent Cq`, `Mean Equivalent Cq`, `Cq`, `Ct` 순서입니다.
+- 그래프의 점은 각 biological replicate의 `RE`입니다.
+- 막대는 biological replicate `RE`의 산술평균입니다.
+- `SD`는 표본 표준편차(`n-1`), `SEM`은 `SD / sqrt(n)`으로 계산합니다.
+
+#### Biogroup Results
+
+Biogroup Results는 biological replicate가 이미 합쳐진 QuantStudio summary이므로 앱에서 ΔΔCq를 다시 계산하지 않습니다. Export에 포함된 다음 값을 그대로 사용합니다.
+
+```text
+막대값     = Rq
+오차막대 하한 = Rq Min
+오차막대 상한 = Rq Max
+```
+
+제공된 QuantStudio export의 95% confidence-level 설정에서는 아래 관계가 확인됩니다.
+
+```text
+Fσ     = DCq SE × F Factor
+
+Rq     = 2^(-DDCq)
+Rq Min = 2^(-(DDCq + Fσ))
+Rq Max = 2^(-(DDCq - Fσ))
+```
+
+`2^-x`는 지수변환이므로 Cq 단위의 대칭적인 오차가 Rq에서는 매우 비대칭적인 범위가 됩니다. `n=3`인 경우 이 파일의 `F Factor`는 `4.303`으로, 자유도 2의 95% t 계수와 일치합니다. BioRep 수가 적고 ΔCq 편차가 크면 `Fσ`가 커져 Rq Max가 급격히 증가합니다.
+
+제공된 데이터의 `MSH3-53 / MSH3` 예:
+
+```text
+BioRep ΔCq       = 5.916, 11.092, 5.220
+SD / SEM         = 3.208 / 1.852
+Fσ               = 1.852 × 4.303 = 7.969
+DDCq             = 0.909
+DDCq confidence  = -7.060 ~ 8.879
+Rq               = 0.532
+Rq Min ~ Rq Max  = 0.002 ~ 133.466
+```
+
+큰 error bar는 expression 자체가 높다는 뜻이 아니라 biological replicate 사이 ΔCq 변동이 크고 추정 정밀도가 낮다는 뜻입니다. 이 예에서는 B2 ΔCq가 다른 두 replicate보다 약 5 cycle 높습니다. Raw amplification curve, melt curve, technical replicate 편차, reference gene 안정성을 먼저 확인해야 하며 그래프 모양만을 위해 replicate를 임의 제외하면 안 됩니다.
+
+Sample Results와 Biogroup Results의 막대가 정확히 같지 않을 수도 있습니다. Sample Results 그래프는 `BioRep별 RE의 산술평균`이고, Biogroup Rq는 `aggregate mean Cq를 변환한 값`이기 때문입니다. 지수변환에서는 일반적으로 `mean(2^-x) != 2^-mean(x)`입니다.
+
 qPCR Figure 설정에서 Y축 최소값과 최대값을 직접 지정할 수 있습니다. 두 값을 비우면 자동 범위로 돌아갑니다. Biogroup Results의 장비 신뢰구간이 지나치게 넓을 때는 오차막대를 `없음`으로 바꿔 Rq 막대만 확인할 수 있습니다.
 
 계산은 comparative Cq 방식인 `2^-ΔΔCq`를 사용합니다. 이 방식은 target/reference assay의 증폭 효율이 충분히 유사하다는 가정이 필요합니다. 효율 차이가 큰 assay에는 efficiency-corrected 분석을 사용해야 합니다.
 
 - Livak & Schmittgen, 2001: <https://pubmed.ncbi.nlm.nih.gov/11846609/>
 - MIQE guidelines: <https://pubmed.ncbi.nlm.nih.gov/19246619/>
+- Thermo Fisher QuantStudio Design and Analysis Software User Guide: <https://documents.thermofisher.com/TFS-Assets/LSG/manuals/100103660_QS_DA_GC_SW_1_0_UG.pdf>
 
 기본 컬럼 예시:
 
