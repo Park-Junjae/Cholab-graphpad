@@ -56,7 +56,7 @@ qPCR 탭은 장비에서 export한 raw table을 받아 relative expression 그�
 - QuantStudio `Sample Results`: `Sample Name`, `Target Name`, cycle mean 컬럼
 - QuantStudio CSV의 `#` metadata 줄과 trailing empty column 자동 처리
 
-QuantStudio `Sample Results`의 `-B1`, `-B2`, `-B3` suffix는 biological replicate로 사용합니다. Technical replicate는 cycle mean에 이미 요약된 것으로 처리합니다. `Biogroup Results`는 replicate가 이미 합쳐진 summary이므로 biological replicate dot 계산에는 사용할 수 없습니다.
+QuantStudio `Sample Results`의 `-B1`, `-B2`, `-B3` suffix는 biological replicate로 사용합니다. Technical replicate는 cycle mean에 이미 요약된 것으로 처리합니다. `Biogroup Results`는 QuantStudio가 계산한 `Rq`, `Rq Min`, `Rq Max`를 aggregate 그래프로 표시하지만, replicate가 이미 합쳐진 summary이므로 biological replicate dot이나 SD/SEM 계산에는 사용할 수 없습니다.
 
 계산은 comparative Cq 방식인 `2^-ΔΔCq`를 사용합니다. 이 방식은 target/reference assay의 증폭 효율이 충분히 유사하다는 가정이 필요합니다. 효율 차이가 큰 assay에는 efficiency-corrected 분석을 사용해야 합니다.
 

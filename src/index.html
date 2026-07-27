@@ -1640,7 +1640,7 @@
               </div>
               <div id="libraryStatus" class="status ok" style="margin-top:12px;">브라우저 분석 라이브러리 준비 완료</div>
               <div id="qpcrStatus" class="status" style="margin-top:10px;">qPCR raw table을 넣어주세요.</div>
-              <div id="qpcrInputSummary" class="status" style="margin-top:10px;">지원 형식: raw Well/Target/Sample/Ct·Cq, QuantStudio Sample Results</div>
+              <div id="qpcrInputSummary" class="status" style="margin-top:10px;">지원 형식: raw Ct/Cq, QuantStudio Sample Results, Biogroup Results</div>
             </div>
           </div>
 
@@ -1651,7 +1651,7 @@
             <div class="panel-body">
               <div class="field-grid">
                 <div class="field">
-                  <label for="qpcrCycleColumn">Ct/Cq 값 컬럼</label>
+                  <label id="qpcrCycleColumnLabel" for="qpcrCycleColumn">Ct/Cq 계산값 컬럼</label>
                   <select id="qpcrCycleColumn">
                     <option value="auto">자동 선택</option>
                   </select>
@@ -1703,11 +1703,12 @@
                         <input id="expectedTech" type="number" min="1" max="24" value="3" step="1">
                       </div>
                       <div class="field">
-                        <label for="qpcrErrorBar">오차막대 Error bar</label>
+                        <label id="qpcrErrorBarLabel" for="qpcrErrorBar">오차막대 Error bar</label>
                         <select id="qpcrErrorBar">
                           <option value="sem">SEM</option>
                           <option value="sd">SD</option>
                           <option value="none">없음</option>
+                          <option value="ci">Rq Min/Max (QuantStudio CI)</option>
                         </select>
                       </div>
                     </div>
@@ -2804,7 +2805,9 @@
       configureQpcrInputMode();
       $("qpcrRowCount").textContent = state.qpcrRows.length;
       const formatLabel = qpcrInputModeLabel(state.qpcrInputMode);
-      const cycleLabel = state.qpcrCycleColumn ? ` · ${state.qpcrCycleColumn}` : "";
+      const cycleLabel = state.qpcrInputMode === "quantstudio_biogroup_results"
+        ? ` · graph value: Rq · Cq summary: ${state.qpcrCycleColumn || "없음"}`
+        : (state.qpcrCycleColumn ? ` · calculation value: ${state.qpcrCycleColumn}` : "");
       const statusClass = state.qpcrInputMode === "unknown" || state.qpcrInputMode === "quantstudio_biogroup_results" ? "warn" : "ok";
       setStatus("qpcrStatus", `${sourceName}: ${state.qpcrRows.length} rows · ${formatLabel}${cycleLabel}`, state.qpcrRows.length ? statusClass : "");
       updateQpcrSelectors();
@@ -2814,7 +2817,9 @@
     function detectQpcrInput(rows, requestedCycle = "auto") {
       if (window.CholabQpcrCore) return CholabQpcrCore.detectFormat(rows, requestedCycle);
       const mapping = detectQpcrColumns(rows);
-      const mode = mapping.target && mapping.sample && mapping.ct ? "raw_well_or_tidy" : "unknown";
+      const mode = mapping.biogroup && mapping.target && mapping.rq
+        ? "quantstudio_biogroup_results"
+        : (mapping.target && mapping.sample && mapping.ct ? "raw_well_or_tidy" : "unknown");
       return {
         mode,
         mapping: {
@@ -2882,6 +2887,7 @@
       const mode = state.qpcrInputMode;
       const isSampleResults = mode === "quantstudio_sample_results";
       const isBiogroup = mode === "quantstudio_biogroup_results";
+      const cycleColumn = state.qpcrCycleColumn || "자동 선택";
       $("qpcrFormatChip").textContent = qpcrInputModeLabel(mode);
       document.querySelectorAll("input[name='qpcrRepMode']").forEach((input) => {
         input.disabled = isSampleResults || isBiogroup;
@@ -2889,17 +2895,26 @@
       $("assignmentMode").disabled = isSampleResults || isBiogroup;
       $("expectedTech").disabled = isSampleResults || isBiogroup;
       $("undeterminedCt").disabled = isSampleResults || isBiogroup;
+      $("expectedBio").disabled = isBiogroup;
+      $("refGene").disabled = isBiogroup;
+      $("calibratorSample").disabled = isBiogroup;
+      $("qpcrCycleColumn").disabled = isBiogroup || (state.qpcrAvailableCycleColumns || []).length < 2;
+      $("qpcrErrorBar").disabled = isBiogroup;
+      $("qpcrCycleColumnLabel").textContent = isBiogroup ? "장비 Cq 컬럼 (참고용)" : "Ct/Cq 계산값 컬럼";
+      $("qpcrErrorBarLabel").textContent = isBiogroup ? "오차막대: Rq Min/Max (장비 신뢰구간)" : "오차막대 Error bar";
       if (isSampleResults) {
+        if ($("qpcrErrorBar").value === "ci") $("qpcrErrorBar").value = "sem";
         document.querySelector("input[name='qpcrRepMode'][value='bio']").checked = true;
         $("assignmentMode").value = "sample_name";
         $("expectedTech").value = "1";
         $("qpcrInputSummary").className = "status ok";
         $("qpcrInputSummary").textContent =
-          "B1/B2/B3를 biological replicate로 사용합니다. Technical replicate는 QuantStudio cycle mean에 이미 요약되어 있습니다.";
+          `계산값: ${cycleColumn}. B1/B2/B3를 biological replicate로 사용하며 technical replicate는 QuantStudio cycle mean에 이미 요약되어 있습니다.`;
       } else if (isBiogroup) {
+        $("qpcrErrorBar").value = "ci";
         $("qpcrInputSummary").className = "status warn";
         $("qpcrInputSummary").textContent =
-          "Biogroup Results는 이미 aggregate된 요약입니다. Biological replicate 점 계산에는 Sample Results CSV가 필요합니다.";
+          `그래프 값: Rq. 오차막대: Rq Min/Max. ${cycleColumn}는 장비가 Rq를 계산할 때 사용한 Cq 요약값이며 앱에서 다시 ΔΔCq 계산하지 않습니다.`;
       } else {
         document.querySelectorAll("input[name='qpcrRepMode']").forEach((input) => {
           input.disabled = false;
@@ -2907,6 +2922,11 @@
         $("assignmentMode").disabled = false;
         $("expectedTech").disabled = false;
         $("undeterminedCt").disabled = false;
+        $("expectedBio").disabled = false;
+        $("refGene").disabled = false;
+        $("calibratorSample").disabled = false;
+        $("qpcrErrorBar").disabled = false;
+        if ($("qpcrErrorBar").value === "ci") $("qpcrErrorBar").value = "sem";
         if ($("expectedTech").value === "1") $("expectedTech").value = "3";
         $("qpcrInputSummary").className = mode === "unknown" ? "status warn" : "status ok";
         $("qpcrInputSummary").textContent = mode === "unknown"
@@ -2951,8 +2971,8 @@
       if (!rows.length || rows.length < 2 || sheetNameSuggestsMatrix(sourceName)) return null;
       const cols = getColumns(rows);
       if (cols.length < 3) return null;
-      const qPCR = detectQpcrColumns(rows);
-      if (qPCR.target && qPCR.sample && qPCR.ct) return null;
+      const qPCR = detectQpcrInput(rows, "auto");
+      if (qPCR.mode !== "unknown") return null;
       if (findColumnName(cols, ["pvalue", "p value", "p.value", "p_val", "padj", "adjusted p", "qvalue", "fdr"]) &&
           findColumnName(cols, ["log2fc", "log2 fold change", "logfc", "log fold change", "foldchange", "fold change"])) {
         return null;
@@ -3025,7 +3045,9 @@
     function updateQpcrSelectors() {
       const mapping = detectQpcrColumns(state.qpcrRows);
       const targets = orderedUnique(state.qpcrRows.map((r) => value(r, mapping.target)).filter(Boolean));
-      const samples = orderedUnique(state.qpcrRows.map((r) => value(r, mapping.sample)).filter(Boolean));
+      const isBiogroup = state.qpcrInputMode === "quantstudio_biogroup_results";
+      const sampleColumn = isBiogroup ? mapping.biogroup : mapping.sample;
+      const samples = orderedUnique(state.qpcrRows.map((r) => value(r, sampleColumn)).filter(Boolean));
       const sampleBases = orderedUnique(
         samples
           .map((sample) => parseBioRepFromSample(sample))
@@ -3047,7 +3069,7 @@
         calibratorOptions,
         firstPreferred(calibratorOptions, [metadataCalibrator, "HELA", "Control", "CTRL", "WT"].filter(Boolean))
       );
-      if (sampleResultsMode) {
+      if (sampleResultsMode || isBiogroup) {
         const autoExcluded = calibratorOptions.filter((sample) =>
           /^nc(?:[-_ ]|$)/i.test(sample) || DEFAULT_EXCLUDES.some((item) => normalize(item) === normalize(sample))
         );
@@ -3122,14 +3144,15 @@
       });
       const numericCols = columnInfo.filter((c) => c.isNumeric).map((c) => c.name);
       const categoryCols = columnInfo.filter((c) => !c.isNumeric || c.isMostlyCategory).map((c) => c.name);
-      const qPCR = detectQpcrColumns(rows);
+      const qPCR = detectQpcrInput(rows, "auto");
       return {
         rows,
         cols,
         columnInfo,
         numericCols,
         categoryCols,
-        qPCRLike: Boolean(qPCR.target && qPCR.sample && qPCR.ct),
+        qPCRLike: qPCR.mode !== "unknown",
+        qPCRMode: qPCR.mode,
         wideMatrix: numericCols.length >= 3 && categoryCols.length >= 1,
         rowCount: rows.length
       };
@@ -3212,7 +3235,9 @@
         return {
           route: "qpcr",
           plotType: "grouped_bar",
-          reason: "Target, Sample, Cq 컬럼이 있어 qPCR raw data로 인식했습니다.",
+          reason: profile.qPCRMode === "quantstudio_biogroup_results"
+            ? "Bio Group, Target, Rq 컬럼이 있어 QuantStudio Biogroup Results로 인식했습니다."
+            : "Target, Sample, Ct/Cq 컬럼이 있어 qPCR data로 인식했습니다.",
           confidence: "높음"
         };
       }
@@ -3472,14 +3497,11 @@
         configureQpcrInputMode();
         updateQpcrSelectors();
         const repMode = document.querySelector("input[name='qpcrRepMode']:checked").value;
-        if (state.qpcrInputMode === "quantstudio_biogroup_results") {
-          throw new Error(
-            "Biogroup Results는 replicate가 이미 합쳐진 summary입니다. B1/B2/B3 biological replicate 계산에는 Sample Results CSV를 업로드하세요."
-          );
-        }
-        state.qpcrResult = state.qpcrInputMode === "quantstudio_sample_results"
-          ? analyzeQpcrSampleResults(state.qpcrRows)
-          : (repMode === "bio" ? analyzeQpcrBioRep(state.qpcrRows) : analyzeQpcrTechRep(state.qpcrRows));
+        state.qpcrResult = state.qpcrInputMode === "quantstudio_biogroup_results"
+          ? analyzeQpcrBiogroupResults(state.qpcrRows)
+          : (state.qpcrInputMode === "quantstudio_sample_results"
+            ? analyzeQpcrSampleResults(state.qpcrRows)
+            : (repMode === "bio" ? analyzeQpcrBioRep(state.qpcrRows) : analyzeQpcrTechRep(state.qpcrRows)));
         state.summaryRows = state.qpcrResult.summary;
         state.resultRows = state.qpcrResult.calcs;
         state.warningRows = state.qpcrResult.warnings;
@@ -3488,7 +3510,7 @@
         renderQpcrPlot();
         renderMetrics([
           ["Targets", state.qpcrResult.targets.length],
-          ["Samples", state.qpcrResult.samples.length],
+          [state.qpcrResult.inputMode === "quantstudio_biogroup_results" ? "Groups" : "Samples", state.qpcrResult.samples.length],
           ["Plot values", state.qpcrResult.plotRows.length],
           ["Warnings", state.qpcrResult.warnings.length]
         ]);
@@ -3510,6 +3532,14 @@
         cycleColumn: $("qpcrCycleColumn").value || state.qpcrCycleColumn || "auto",
         excludeSamples: parseList($("excludeSamples").value),
         expectedBioReps: clampInt($("expectedBio").value, 1, 24, 3)
+      });
+    }
+
+    function analyzeQpcrBiogroupResults(rows) {
+      if (!window.CholabQpcrCore) throw new Error("qPCR 계산 코어를 불러오지 못했습니다.");
+      return CholabQpcrCore.analyzeBiogroupResults(rows, {
+        excludeSamples: parseList($("excludeSamples").value),
+        confidenceLevel: metadataValue(["Confidence Level"])
       });
     }
 
@@ -3861,6 +3891,7 @@
     function renderQpcrPlot() {
       if (!state.qpcrResult) return;
       const errorMode = $("qpcrErrorBar").value;
+      const aggregateMode = state.qpcrResult.inputMode === "quantstudio_biogroup_results";
       const palette = PALETTES[$("qpcrPalette").value] || PALETTES.pubfig;
       const rows = state.qpcrResult.plotRows;
       const targets = state.qpcrResult.targets;
@@ -3878,6 +3909,27 @@
           if (errorMode === "sd") return Number(row["SD RE"] || 0);
           return Number(row["SEM RE"] || 0);
         });
+        const aggregateError = aggregateMode ? {
+          type: "data",
+          symmetric: false,
+          array: targets.map((target) => {
+            const row = summaryMap.get(`${target}|||${sample}`);
+            const meanValue = Number(row?.["Mean RE"]);
+            const upperRaw = row?.["Rq Max"];
+            const upper = upperRaw === "" || upperRaw == null ? NaN : Number(upperRaw);
+            return Number.isFinite(meanValue) && Number.isFinite(upper) ? Math.max(upper - meanValue, 0) : 0;
+          }),
+          arrayminus: targets.map((target) => {
+            const row = summaryMap.get(`${target}|||${sample}`);
+            const meanValue = Number(row?.["Mean RE"]);
+            const lowerRaw = row?.["Rq Min"];
+            const lower = lowerRaw === "" || lowerRaw == null ? NaN : Number(lowerRaw);
+            return Number.isFinite(meanValue) && Number.isFinite(lower) ? Math.max(meanValue - lower, 0) : 0;
+          }),
+          visible: true,
+          thickness: 1.2,
+          width: 3
+        } : undefined;
         traces.push({
           type: "bar",
           meta: { role: "bar" },
@@ -3887,9 +3939,13 @@
           width: barWidth * 0.9,
           marker: { color: palette[i % palette.length], line: { color: "#3c4850", width: 0.8 } },
           opacity: 0.9,
-          hovertemplate: `${sample}<br>${"%{customdata}"}<br>Mean RE=${"%{y:.4g}"}<extra></extra>`,
+          hovertemplate: aggregateMode
+            ? `${sample}<br>${"%{customdata}"}<br>Rq=${"%{y:.4g}"}<extra></extra>`
+            : `${sample}<br>${"%{customdata}"}<br>Mean RE=${"%{y:.4g}"}<extra></extra>`,
           customdata: targets,
-          error_y: errorMode === "none" ? undefined : { type: "data", array: err, visible: true, thickness: 1.2, width: 3 }
+          error_y: aggregateMode
+            ? aggregateError
+            : (errorMode === "none" ? undefined : { type: "data", array: err, visible: true, thickness: 1.2, width: 3 })
         });
         const dotRowsByTarget = targets.flatMap((target, targetIndex) => {
           const subset = rows.filter((r) => r.Sample === sample && r.Target === target);
@@ -3898,19 +3954,21 @@
             x: targetIndex + centeredOffset(i, samples.length, totalWidth) + jitterOffset(rowIndex, subset.length, Math.min(0.07, barWidth * 0.22))
           }));
         });
-        traces.push({
-          type: "scatter",
-          meta: { role: "replicate" },
-          mode: "markers",
-          name: `${sample} dots`,
-          legendgroup: sample,
-          showlegend: false,
-          x: dotRowsByTarget.map((r) => r.x),
-          y: dotRowsByTarget.map((r) => r.row.RE),
-          text: dotRowsByTarget.map((r) => `${r.row.Sample} · ${r.row.Target} · ${r.row.Replicate}`),
-          hovertemplate: "%{text}<br>RE=%{y:.4g}<extra></extra>",
-          marker: { size: 8, color: "#fff", line: { color: "#1f2933", width: 1 } }
-        });
+        if (!aggregateMode) {
+          traces.push({
+            type: "scatter",
+            meta: { role: "replicate" },
+            mode: "markers",
+            name: `${sample} dots`,
+            legendgroup: sample,
+            showlegend: false,
+            x: dotRowsByTarget.map((r) => r.x),
+            y: dotRowsByTarget.map((r) => r.row.RE),
+            text: dotRowsByTarget.map((r) => `${r.row.Sample} · ${r.row.Target} · ${r.row.Replicate}`),
+            hovertemplate: "%{text}<br>RE=%{y:.4g}<extra></extra>",
+            marker: { size: 8, color: "#fff", line: { color: "#1f2933", width: 1 } }
+          });
+        }
       });
       const title = $("qpcrTitle").value || "RT-qPCR relative expression";
       const layout = baseLayout(title, "Target gene", $("qpcrYTitle").value || "Relative expression", $("qpcrYScale").value);
@@ -5538,7 +5596,7 @@
       $("qpcrCycleColumn").disabled = true;
       $("qpcrFormatChip").textContent = "입력 대기";
       $("qpcrInputSummary").className = "status";
-      $("qpcrInputSummary").textContent = "지원 형식: raw Well/Target/Sample/Ct·Cq, QuantStudio Sample Results";
+      $("qpcrInputSummary").textContent = "지원 형식: raw Ct/Cq, QuantStudio Sample Results, Biogroup Results";
       $("generalPaste").value = "";
       $("xTickLabels").value = "";
       $("xTransform").value = "none";
@@ -5567,6 +5625,10 @@
           well: mapping.well,
           target: mapping.target,
           sample: mapping.sample,
+          biogroup: mapping.biogroup,
+          rq: mapping.rq,
+          rqMin: mapping.rqMin,
+          rqMax: mapping.rqMax,
           ct: mapping.cycle,
           availableCycleColumns: mapping.availableCycleColumns
         };
@@ -5576,6 +5638,10 @@
         well: findColumnName(cols, ["Well", "Well Position", "Position", "Well ID", "WellID"]),
         target: findColumnName(cols, ["Target", "Target Name", "TargetName", "Gene", "Gene Symbol", "Gene Name", "Assay", "Assay Name", "Detector", "유전자", "타겟"]),
         sample: findColumnName(cols, ["Sample", "Sample Name", "SampleName", "Sample ID", "SampleID", "Specimen", "Condition", "Treatment", "Group", "샘플", "조건", "그룹"]),
+        biogroup: findColumnName(cols, ["Bio Group Name", "Biogroup Name", "BioGroup Name"]),
+        rq: findColumnName(cols, ["Rq", "RQ", "Relative Quantity", "Relative Expression"]),
+        rqMin: findColumnName(cols, ["Rq Min", "RQ Min", "Relative Quantity Min"]),
+        rqMax: findColumnName(cols, ["Rq Max", "RQ Max", "Relative Quantity Max"]),
         ct: findColumnName(cols, ["Cq", "Ct", "CP", "Cp", "Cq Mean", "Ct Mean", "Mean Cq", "Mean Ct", "Mean Equivalent Cq", "Mean Adjusted Equivalent Cq", "Mean Equivalent Ct", "Mean Adjusted Equivalent Ct", "Cycle Threshold", "Threshold Cycle", "Quantification Cycle"])
       };
     }

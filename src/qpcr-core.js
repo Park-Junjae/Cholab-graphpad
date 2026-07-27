@@ -113,6 +113,10 @@
       target: findColumn(columns, TARGET_ALIASES),
       sample: findColumn(columns, SAMPLE_ALIASES),
       biogroup: findColumn(columns, BIOGROUP_ALIASES),
+      rq: findColumn(columns, ["Rq", "RQ", "Relative Quantity", "Relative Expression"]),
+      rqMin: findColumn(columns, ["Rq Min", "RQ Min", "Relative Quantity Min"]),
+      rqMax: findColumn(columns, ["Rq Max", "RQ Max", "Relative Quantity Max"]),
+      correctedPValue: findColumn(columns, ["Corrected P-Value", "Adjusted P-Value", "Adjusted P Value"]),
       cycle,
       availableCycleColumns: cycles
     };
@@ -454,6 +458,99 @@
     };
   }
 
+  function analyzeBiogroupResults(rows, options) {
+    const {
+      excludeSamples = [],
+      confidenceLevel = ""
+    } = options || {};
+    const detected = detectFormat(rows, "auto");
+    if (detected.mode !== "quantstudio_biogroup_results") {
+      throw new Error(`QuantStudio Biogroup Results 형식이 아닙니다. 감지 형식: ${detected.mode}`);
+    }
+    const mapping = detected.mapping;
+    if (!mapping.rq) {
+      throw new Error("Biogroup Results에서 Rq 컬럼을 찾지 못했습니다.");
+    }
+    const excluded = new Set(excludeSamples.map(clean));
+    const warnings = [];
+    const calculations = rows.map((row, index) => ({
+      sourceRow: index + 1,
+      sample: clean(row[mapping.biogroup]),
+      target: clean(row[mapping.target]),
+      rq: parseNumber(row[mapping.rq]),
+      rqMin: mapping.rqMin ? parseNumber(row[mapping.rqMin]) : NaN,
+      rqMax: mapping.rqMax ? parseNumber(row[mapping.rqMax]) : NaN,
+      correctedPValue: mapping.correctedPValue ? parseNumber(row[mapping.correctedPValue]) : NaN
+    })).filter((row) => row.sample && row.target && !excluded.has(row.sample));
+
+    const finiteRows = calculations.filter((row) => Number.isFinite(row.rq));
+    if (!finiteRows.length) throw new Error("Biogroup Results의 Rq 컬럼에 그래프로 그릴 숫자 값이 없습니다.");
+    const duplicates = new Map();
+    finiteRows.forEach((row) => {
+      const key = `${row.sample}|||${row.target}`;
+      duplicates.set(key, (duplicates.get(key) || 0) + 1);
+    });
+    duplicates.forEach((count, key) => {
+      if (count < 2) return;
+      const [sample, target] = key.split("|||");
+      warnings.push({
+        Level: "duplicate Biogroup Results",
+        Sample: sample,
+        Target: target,
+        Issue: `${count} aggregate Rq rows detected`
+      });
+    });
+
+    const targets = orderedUnique(finiteRows.map((row) => row.target));
+    const samples = orderedUnique(finiteRows.map((row) => row.sample));
+    const plotRows = finiteRows.map((row) => ({
+      Target: row.target,
+      Sample: row.sample,
+      Replicate: "QuantStudio aggregate",
+      RE: row.rq,
+      "Rq Min": Number.isFinite(row.rqMin) ? row.rqMin : "",
+      "Rq Max": Number.isFinite(row.rqMax) ? row.rqMax : "",
+      "Corrected P-Value": Number.isFinite(row.correctedPValue) ? row.correctedPValue : ""
+    }));
+    const summary = plotRows.map((row) => ({
+      Target: row.Target,
+      Sample: row.Sample,
+      "n aggregate": 1,
+      "Mean RE": round(row.RE),
+      "Rq Min": Number.isFinite(row["Rq Min"]) ? round(row["Rq Min"]) : "",
+      "Rq Max": Number.isFinite(row["Rq Max"]) ? round(row["Rq Max"]) : "",
+      "Corrected P-Value": Number.isFinite(row["Corrected P-Value"])
+        ? round(row["Corrected P-Value"])
+        : ""
+    }));
+    const calcs = calculations.map((row) => ({
+      "Source row": row.sourceRow,
+      "Bio Group": row.sample,
+      Target: row.target,
+      Rq: Number.isFinite(row.rq) ? round(row.rq) : "",
+      "Rq Min": Number.isFinite(row.rqMin) ? round(row.rqMin) : "",
+      "Rq Max": Number.isFinite(row.rqMax) ? round(row.rqMax) : "",
+      "Corrected P-Value": Number.isFinite(row.correctedPValue) ? round(row.correctedPValue) : ""
+    }));
+    const intervalLabel = confidenceLevel ? `${confidenceLevel} 신뢰구간` : "신뢰구간";
+    return {
+      mode: "Biogroup aggregate",
+      inputMode: detected.mode,
+      targets,
+      samples,
+      plotRows,
+      summary,
+      calcs,
+      warnings,
+      notes: [
+        "Input: QuantStudio Biogroup Results",
+        "QuantStudio가 계산한 Rq 값을 그대로 사용하며 2^-ΔΔCq를 다시 계산하지 않습니다.",
+        `Rq Min/Rq Max는 export에 포함된 ${intervalLabel}으로 표시합니다.`,
+        "Biological replicate가 이미 합쳐진 aggregate이므로 개별 BioRep 점과 SD/SEM은 만들 수 없습니다. 반복점이 필요하면 Sample Results를 사용하세요."
+      ]
+    };
+  }
+
   return {
     CYCLE_ALIASES,
     CYCLE_PRIORITY,
@@ -468,6 +565,7 @@
     parseDelimited,
     parseNumber,
     parseBioRepFromSample,
-    analyzeSampleResults
+    analyzeSampleResults,
+    analyzeBiogroupResults
   };
 });

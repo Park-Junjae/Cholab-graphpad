@@ -68,7 +68,7 @@ test("Sample Results calculate biological-replicate delta-delta Cq", () => {
   assert.equal(treat["SEM RE"], 0);
 });
 
-test("Biogroup Results is rejected for replicate-dot calculation", () => {
+test("Biogroup Results is rejected by the replicate-dot calculation", () => {
   const rows = [{ "Bio Group Name": "CTRL", "Target Name": "GENE1", Rq: "1" }];
   assert.throws(
     () => core.analyzeSampleResults(rows, {
@@ -77,4 +77,18 @@ test("Biogroup Results is rejected for replicate-dot calculation", () => {
     }),
     /Biogroup Results/
   );
+});
+
+test("Biogroup Results uses exported Rq and confidence interval", () => {
+  const rows = [
+    { "Bio Group Name": "CTRL", "Target Name": "GENE1", Rq: "1", "Rq Min": "0.8", "Rq Max": "1.2" },
+    { "Bio Group Name": "TREAT", "Target Name": "GENE1", Rq: "2", "Rq Min": "1.5", "Rq Max": "2.7" }
+  ];
+  const result = core.analyzeBiogroupResults(rows, { confidenceLevel: "95.0" });
+  assert.equal(result.mode, "Biogroup aggregate");
+  assert.equal(result.plotRows.length, 2);
+  assert.equal(result.summary[1]["Mean RE"], 2);
+  assert.equal(result.summary[1]["Rq Min"], 1.5);
+  assert.equal(result.summary[1]["Rq Max"], 2.7);
+  assert.match(result.notes.join("\n"), /개별 BioRep 점과 SD\/SEM은 만들 수 없습니다/);
 });
