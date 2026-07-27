@@ -120,7 +120,7 @@ Rq Min ~ Rq Max  = 0.002 ~ 133.466
 
 Sample Results와 Biogroup Results의 막대가 정확히 같지 않을 수도 있습니다. Sample Results 그래프는 `BioRep별 RE의 산술평균`이고, Biogroup Rq는 `aggregate mean Cq를 변환한 값`이기 때문입니다. 지수변환에서는 일반적으로 `mean(2^-x) != 2^-mean(x)`입니다.
 
-qPCR Figure 설정에서 Y축 최소값과 최대값을 직접 지정할 수 있습니다. 두 값을 비우면 자동 범위로 돌아갑니다. Biogroup Results의 장비 신뢰구간이 지나치게 넓을 때는 오차막대를 `없음`으로 바꿔 Rq 막대만 확인할 수 있습니다.
+qPCR Figure 설정에서 Y축 최소값, 최대값, 눈금 간격, 소수점 자릿수를 직접 지정할 수 있습니다. 값을 비우면 각 항목이 자동 설정으로 돌아갑니다. 눈금 간격은 Linear 축에서 사용하며 Log 축에서는 자동 계산됩니다. Biogroup Results의 장비 신뢰구간이 지나치게 넓을 때는 오차막대를 `없음`으로 바꿔 Rq 막대만 확인할 수 있습니다.
 
 계산은 comparative Cq 방식인 `2^-ΔΔCq`를 사용합니다. 이 방식은 target/reference assay의 증폭 효율이 충분히 유사하다는 가정이 필요합니다. 효율 차이가 큰 assay에는 efficiency-corrected 분석을 사용해야 합니다.
 
@@ -153,6 +153,9 @@ A3      IL6       Control_1  26.4
 - `제목 Title`, `X축 이름`, `Y축 이름`: 그래프에 표시될 이름을 직접 입력합니다.
 - `오차막대 Error bar`: SEM, SD, 95% CI, 없음 중에서 선택합니다.
 - `X값 변환`, `Y값 변환`: log10, log2, ln, sqrt, z-score, percent 변환을 적용합니다.
+- `Y축 최소값`, `Y축 최대값`: 일반 그래프와 qPCR 그래프의 표시 범위를 직접 좁히거나 넓힙니다.
+- `Y축 눈금 간격`: Linear 축의 주 눈금 간격을 직접 지정합니다. 비우면 자동입니다.
+- `Y축 소수점 자릿수`: Y축 눈금 라벨을 0~8자리로 고정합니다. 비우면 자동입니다.
 - `범례 위치 Legend`: Right, Top, Bottom, Left, Floating, Hide 중에서 선택합니다.
 
 ## Figure 스타일

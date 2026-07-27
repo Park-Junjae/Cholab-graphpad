@@ -1746,8 +1746,16 @@
                         <input id="qpcrYMax" type="number" step="any" placeholder="Auto">
                       </div>
                       <div class="field">
-                        <span class="field-label">Y축 범위</span>
-                        <button class="btn" id="qpcrYRangeAutoBtn" type="button">자동 범위로 초기화</button>
+                        <label for="qpcrYTickStep">Y축 눈금 간격 (Linear)</label>
+                        <input id="qpcrYTickStep" type="number" min="0" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <label for="qpcrYDecimals">Y축 소수점 자릿수</label>
+                        <input id="qpcrYDecimals" type="number" min="0" max="8" step="1" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <span class="field-label">Y축 범위와 눈금</span>
+                        <button class="btn" id="qpcrYRangeAutoBtn" type="button">자동 설정으로 초기화</button>
                       </div>
                       <div class="field">
                         <label for="qpcrLegendPosition">범례 위치 Legend</label>
@@ -1972,6 +1980,26 @@
                           <option value="linear">Linear</option>
                           <option value="log">Log</option>
                         </select>
+                      </div>
+                      <div class="field">
+                        <label for="generalYMin">Y축 최소값 (비우면 자동)</label>
+                        <input id="generalYMin" type="number" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <label for="generalYMax">Y축 최대값 (비우면 자동)</label>
+                        <input id="generalYMax" type="number" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <label for="generalYTickStep">Y축 눈금 간격 (Linear)</label>
+                        <input id="generalYTickStep" type="number" min="0" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <label for="generalYDecimals">Y축 소수점 자릿수</label>
+                        <input id="generalYDecimals" type="number" min="0" max="8" step="1" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <span class="field-label">Y축 범위와 눈금</span>
+                        <button class="btn" id="generalYRangeAutoBtn" type="button">자동 설정으로 초기화</button>
                       </div>
                       <div class="field">
                         <label for="xTransform">X값 변환</label>
@@ -2262,8 +2290,10 @@
       $("calibratorSample").innerHTML = "";
       $("qpcrCycleColumn").innerHTML = '<option value="auto">자동 선택</option>';
       $("qpcrCycleColumn").disabled = true;
-      $("qpcrYMin").value = "";
-      $("qpcrYMax").value = "";
+      clearYAxisControlValues("qpcr");
+      clearYAxisControlValues("general");
+      syncYAxisControlAvailability("qpcr");
+      syncYAxisControlAvailability("general");
       $("qpcrFormatChip").textContent = "입력 대기";
       $("qpcrInputSummary").textContent = "지원 형식: raw Ct/Cq, QuantStudio Sample Results, Biogroup Results";
       $("sheetSelect").innerHTML = "";
@@ -2374,26 +2404,32 @@
       $("downloadSvgBtn").addEventListener("click", () => downloadPlot("svg"));
       $("downloadCsvBtn").addEventListener("click", downloadCurrentCsv);
       $("downloadXlsxBtn").addEventListener("click", downloadCurrentXlsx);
-      ["plotType", "xColumn", "yColumn", "groupColumn", "labelColumn", "aggregate", "generalErrorBar", "generalPalette", "plotTitle", "xTitle", "yTitle", "xTickLabels", "yScale", "xTransform", "yTransform", "generalLegendPosition"].forEach((id) => {
+      ["plotType", "xColumn", "yColumn", "groupColumn", "labelColumn", "aggregate", "generalErrorBar", "generalPalette", "plotTitle", "xTitle", "yTitle", "xTickLabels", "yScale", "generalYMin", "generalYMax", "generalYTickStep", "generalYDecimals", "xTransform", "yTransform", "generalLegendPosition"].forEach((id) => {
         $(id).addEventListener("change", () => {
           if (id === "groupColumn") syncQuickGroupSelect();
           if (id === "plotType") updateGraphOptionButtons(state.generalRecommendation?.plotType);
+          if (id === "yScale") syncYAxisControlAvailability("general");
           if (state.mode === "General" && state.generalRows.length) drawGeneral(false);
         });
       });
       $("xTickLabels").addEventListener("input", debounce(() => {
         if (state.mode === "General" && state.generalRows.length) drawGeneral(false);
       }, 250));
-      ["qpcrErrorBar", "qpcrPalette", "qpcrTitle", "qpcrYTitle", "qpcrYScale", "qpcrYMin", "qpcrYMax", "qpcrLegendPosition"].forEach((id) => {
+      ["qpcrErrorBar", "qpcrPalette", "qpcrTitle", "qpcrYTitle", "qpcrYScale", "qpcrYMin", "qpcrYMax", "qpcrYTickStep", "qpcrYDecimals", "qpcrLegendPosition"].forEach((id) => {
         $(id).addEventListener("change", () => {
+          if (id === "qpcrYScale") syncYAxisControlAvailability("qpcr");
           if (state.mode === "qPCR" && state.qpcrResult) renderQpcrPlot();
         });
       });
       $("qpcrYRangeAutoBtn").addEventListener("click", () => {
-        $("qpcrYMin").value = "";
-        $("qpcrYMax").value = "";
+        clearYAxisControlValues("qpcr");
         if (state.mode === "qPCR" && state.qpcrResult) renderQpcrPlot();
-        showToast("qPCR Y축을 자동 범위로 돌렸습니다.");
+        showToast("qPCR Y축 범위와 눈금을 자동 설정으로 돌렸습니다.");
+      });
+      $("generalYRangeAutoBtn").addEventListener("click", () => {
+        clearYAxisControlValues("general");
+        if (state.mode === "General" && state.generalRows.length) drawGeneral(false);
+        showToast("일반 그래프 Y축 범위와 눈금을 자동 설정으로 돌렸습니다.");
       });
       window.addEventListener("resize", debounce(() => {
         if (state.plotReady && window.Plotly) {
@@ -3992,7 +4028,7 @@
       });
       const title = $("qpcrTitle").value || "RT-qPCR relative expression";
       const layout = baseLayout(title, "Target gene", $("qpcrYTitle").value || "Relative expression", $("qpcrYScale").value);
-      applyManualQpcrYRange(layout);
+      applyManualYAxisControls(layout, "qpcr");
       layout.xaxis.tickmode = "array";
       layout.xaxis.tickvals = targets.map((_, i) => i);
       layout.xaxis.ticktext = targets;
@@ -4004,34 +4040,107 @@
       $("modeChip").textContent = `qPCR · ${state.qpcrResult.mode}`;
     }
 
-    function applyManualQpcrYRange(layout) {
-      const minText = cleanName($("qpcrYMin").value);
-      const maxText = cleanName($("qpcrYMax").value);
-      $("qpcrYMin").setCustomValidity("");
-      $("qpcrYMax").setCustomValidity("");
-      if (!minText && !maxText) return;
-      if (!minText || !maxText) {
-        const message = "Y축 최소값과 최대값을 모두 입력하거나 둘 다 비워주세요.";
-        $("qpcrYMin").setCustomValidity(message);
-        $("qpcrYMax").setCustomValidity(message);
-        return;
+    function yAxisControlIds(prefix) {
+      if (prefix === "qpcr") {
+        return {
+          min: "qpcrYMin",
+          max: "qpcrYMax",
+          tickStep: "qpcrYTickStep",
+          decimals: "qpcrYDecimals",
+          scale: "qpcrYScale"
+        };
       }
-      const minValue = Number(minText);
-      const maxValue = Number(maxText);
-      const logScale = $("qpcrYScale").value === "log";
-      if (!Number.isFinite(minValue) || !Number.isFinite(maxValue) || maxValue <= minValue || (logScale && minValue <= 0)) {
-        const message = logScale
-          ? "Log 축은 0보다 큰 최소값과 더 큰 최대값이 필요합니다."
-          : "Y축 최대값은 최소값보다 커야 합니다.";
-        $("qpcrYMin").setCustomValidity(message);
-        $("qpcrYMax").setCustomValidity(message);
-        return;
+      return {
+        min: "generalYMin",
+        max: "generalYMax",
+        tickStep: "generalYTickStep",
+        decimals: "generalYDecimals",
+        scale: "yScale"
+      };
+    }
+
+    function clearYAxisControlValues(prefix) {
+      const ids = yAxisControlIds(prefix);
+      [ids.min, ids.max, ids.tickStep, ids.decimals].forEach((id) => {
+        const input = $(id);
+        if (!input) return;
+        input.value = "";
+        input.setCustomValidity("");
+      });
+    }
+
+    function syncYAxisControlAvailability(prefix) {
+      const ids = yAxisControlIds(prefix);
+      const tickStepInput = $(ids.tickStep);
+      if (!tickStepInput) return;
+      const logScale = $(ids.scale)?.value === "log";
+      tickStepInput.disabled = logScale;
+      tickStepInput.title = logScale
+        ? "Log 축의 눈금 간격은 자동으로 계산됩니다."
+        : "비우면 데이터 범위에 맞춰 자동으로 계산됩니다.";
+    }
+
+    function applyManualYAxisControls(layout, prefix) {
+      if (!layout?.yaxis) return;
+      const ids = yAxisControlIds(prefix);
+      const minInput = $(ids.min);
+      const maxInput = $(ids.max);
+      const tickStepInput = $(ids.tickStep);
+      const decimalsInput = $(ids.decimals);
+      const logScale = $(ids.scale)?.value === "log";
+      const inputs = [minInput, maxInput, tickStepInput, decimalsInput].filter(Boolean);
+      inputs.forEach((input) => input.setCustomValidity(""));
+
+      const minText = cleanName(minInput?.value);
+      const maxText = cleanName(maxInput?.value);
+      if (minText || maxText) {
+        if (!minText || !maxText) {
+          const message = "Y축 최소값과 최대값을 모두 입력하거나 둘 다 비워주세요.";
+          minInput?.setCustomValidity(message);
+          maxInput?.setCustomValidity(message);
+        } else {
+          const minValue = Number(minText);
+          const maxValue = Number(maxText);
+          const validRange = Number.isFinite(minValue) &&
+            Number.isFinite(maxValue) &&
+            maxValue > minValue &&
+            (!logScale || minValue > 0);
+          if (!validRange) {
+            const message = logScale
+              ? "Log 축은 0보다 큰 최소값과 더 큰 최대값이 필요합니다."
+              : "Y축 최대값은 최소값보다 커야 합니다.";
+            minInput?.setCustomValidity(message);
+            maxInput?.setCustomValidity(message);
+          } else {
+            layout.yaxis.autorange = false;
+            layout.yaxis.rangemode = "normal";
+            layout.yaxis.range = logScale
+              ? [Math.log10(minValue), Math.log10(maxValue)]
+              : [minValue, maxValue];
+          }
+        }
       }
-      layout.yaxis.autorange = false;
-      layout.yaxis.rangemode = "normal";
-      layout.yaxis.range = logScale
-        ? [Math.log10(minValue), Math.log10(maxValue)]
-        : [minValue, maxValue];
+
+      const tickStepText = cleanName(tickStepInput?.value);
+      if (!logScale && tickStepText) {
+        const tickStep = Number(tickStepText);
+        if (!Number.isFinite(tickStep) || tickStep <= 0) {
+          tickStepInput?.setCustomValidity("Y축 눈금 간격은 0보다 큰 숫자여야 합니다.");
+        } else {
+          layout.yaxis.tickmode = "linear";
+          layout.yaxis.dtick = tickStep;
+        }
+      }
+
+      const decimalsText = cleanName(decimalsInput?.value);
+      if (decimalsText) {
+        const decimals = Number(decimalsText);
+        if (!Number.isInteger(decimals) || decimals < 0 || decimals > 8) {
+          decimalsInput?.setCustomValidity("소수점 자릿수는 0부터 8 사이의 정수여야 합니다.");
+        } else {
+          layout.yaxis.tickformat = `.${decimals}f`;
+        }
+      }
     }
 
     function drawGeneral(showToastOnDone = true) {
@@ -4042,6 +4151,7 @@
       try {
         const plotType = $("plotType").value;
         const tracesAndRows = buildGeneralPlot(plotType);
+        if (plotType !== "heatmap") applyManualYAxisControls(tracesAndRows.layout, "general");
         state.resultRows = tracesAndRows.resultRows;
         state.summaryRows = tracesAndRows.resultRows;
         state.warningRows = [];
@@ -5652,6 +5762,10 @@
       $("xTickLabels").value = "";
       $("xTransform").value = "none";
       $("yTransform").value = "none";
+      clearYAxisControlValues("qpcr");
+      clearYAxisControlValues("general");
+      syncYAxisControlAvailability("qpcr");
+      syncYAxisControlAvailability("general");
       syncGridControlInputs();
       syncGuideLabelInputs();
       syncFigureStyleControls();
