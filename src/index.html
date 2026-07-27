@@ -1738,6 +1738,18 @@
                         </select>
                       </div>
                       <div class="field">
+                        <label for="qpcrYMin">Y축 최소값 (비우면 자동)</label>
+                        <input id="qpcrYMin" type="number" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <label for="qpcrYMax">Y축 최대값 (비우면 자동)</label>
+                        <input id="qpcrYMax" type="number" step="any" placeholder="Auto">
+                      </div>
+                      <div class="field">
+                        <span class="field-label">Y축 범위</span>
+                        <button class="btn" id="qpcrYRangeAutoBtn" type="button">자동 범위로 초기화</button>
+                      </div>
+                      <div class="field">
                         <label for="qpcrLegendPosition">범례 위치 Legend</label>
                         <select id="qpcrLegendPosition">
                           <option value="right" selected="">Right</option>
@@ -2250,8 +2262,10 @@
       $("calibratorSample").innerHTML = "";
       $("qpcrCycleColumn").innerHTML = '<option value="auto">자동 선택</option>';
       $("qpcrCycleColumn").disabled = true;
+      $("qpcrYMin").value = "";
+      $("qpcrYMax").value = "";
       $("qpcrFormatChip").textContent = "입력 대기";
-      $("qpcrInputSummary").textContent = "지원 형식: raw Well/Target/Sample/Ct·Cq, QuantStudio Sample Results";
+      $("qpcrInputSummary").textContent = "지원 형식: raw Ct/Cq, QuantStudio Sample Results, Biogroup Results";
       $("sheetSelect").innerHTML = "";
       $("xTickLabels").value = "";
       syncGridControlInputs();
@@ -2370,10 +2384,16 @@
       $("xTickLabels").addEventListener("input", debounce(() => {
         if (state.mode === "General" && state.generalRows.length) drawGeneral(false);
       }, 250));
-      ["qpcrErrorBar", "qpcrPalette", "qpcrTitle", "qpcrYTitle", "qpcrYScale", "qpcrLegendPosition"].forEach((id) => {
+      ["qpcrErrorBar", "qpcrPalette", "qpcrTitle", "qpcrYTitle", "qpcrYScale", "qpcrYMin", "qpcrYMax", "qpcrLegendPosition"].forEach((id) => {
         $(id).addEventListener("change", () => {
           if (state.mode === "qPCR" && state.qpcrResult) renderQpcrPlot();
         });
+      });
+      $("qpcrYRangeAutoBtn").addEventListener("click", () => {
+        $("qpcrYMin").value = "";
+        $("qpcrYMax").value = "";
+        if (state.mode === "qPCR" && state.qpcrResult) renderQpcrPlot();
+        showToast("qPCR Y축을 자동 범위로 돌렸습니다.");
       });
       window.addEventListener("resize", debounce(() => {
         if (state.plotReady && window.Plotly) {
@@ -2899,7 +2919,7 @@
       $("refGene").disabled = isBiogroup;
       $("calibratorSample").disabled = isBiogroup;
       $("qpcrCycleColumn").disabled = isBiogroup || (state.qpcrAvailableCycleColumns || []).length < 2;
-      $("qpcrErrorBar").disabled = isBiogroup;
+      $("qpcrErrorBar").disabled = false;
       $("qpcrCycleColumnLabel").textContent = isBiogroup ? "장비 Cq 컬럼 (참고용)" : "Ct/Cq 계산값 컬럼";
       $("qpcrErrorBarLabel").textContent = isBiogroup ? "오차막대: Rq Min/Max (장비 신뢰구간)" : "오차막대 Error bar";
       if (isSampleResults) {
@@ -2911,7 +2931,7 @@
         $("qpcrInputSummary").textContent =
           `계산값: ${cycleColumn}. B1/B2/B3를 biological replicate로 사용하며 technical replicate는 QuantStudio cycle mean에 이미 요약되어 있습니다.`;
       } else if (isBiogroup) {
-        $("qpcrErrorBar").value = "ci";
+        if (!["ci", "none"].includes($("qpcrErrorBar").value)) $("qpcrErrorBar").value = "ci";
         $("qpcrInputSummary").className = "status warn";
         $("qpcrInputSummary").textContent =
           `그래프 값: Rq. 오차막대: Rq Min/Max. ${cycleColumn}는 장비가 Rq를 계산할 때 사용한 Cq 요약값이며 앱에서 다시 ΔΔCq 계산하지 않습니다.`;
@@ -3944,7 +3964,7 @@
             : `${sample}<br>${"%{customdata}"}<br>Mean RE=${"%{y:.4g}"}<extra></extra>`,
           customdata: targets,
           error_y: aggregateMode
-            ? aggregateError
+            ? (errorMode === "none" ? undefined : aggregateError)
             : (errorMode === "none" ? undefined : { type: "data", array: err, visible: true, thickness: 1.2, width: 3 })
         });
         const dotRowsByTarget = targets.flatMap((target, targetIndex) => {
@@ -3972,6 +3992,7 @@
       });
       const title = $("qpcrTitle").value || "RT-qPCR relative expression";
       const layout = baseLayout(title, "Target gene", $("qpcrYTitle").value || "Relative expression", $("qpcrYScale").value);
+      applyManualQpcrYRange(layout);
       layout.xaxis.tickmode = "array";
       layout.xaxis.tickvals = targets.map((_, i) => i);
       layout.xaxis.ticktext = targets;
@@ -3981,6 +4002,36 @@
       plot(traces, layout);
       $("activeTitle").textContent = title;
       $("modeChip").textContent = `qPCR · ${state.qpcrResult.mode}`;
+    }
+
+    function applyManualQpcrYRange(layout) {
+      const minText = cleanName($("qpcrYMin").value);
+      const maxText = cleanName($("qpcrYMax").value);
+      $("qpcrYMin").setCustomValidity("");
+      $("qpcrYMax").setCustomValidity("");
+      if (!minText && !maxText) return;
+      if (!minText || !maxText) {
+        const message = "Y축 최소값과 최대값을 모두 입력하거나 둘 다 비워주세요.";
+        $("qpcrYMin").setCustomValidity(message);
+        $("qpcrYMax").setCustomValidity(message);
+        return;
+      }
+      const minValue = Number(minText);
+      const maxValue = Number(maxText);
+      const logScale = $("qpcrYScale").value === "log";
+      if (!Number.isFinite(minValue) || !Number.isFinite(maxValue) || maxValue <= minValue || (logScale && minValue <= 0)) {
+        const message = logScale
+          ? "Log 축은 0보다 큰 최소값과 더 큰 최대값이 필요합니다."
+          : "Y축 최대값은 최소값보다 커야 합니다.";
+        $("qpcrYMin").setCustomValidity(message);
+        $("qpcrYMax").setCustomValidity(message);
+        return;
+      }
+      layout.yaxis.autorange = false;
+      layout.yaxis.rangemode = "normal";
+      layout.yaxis.range = logScale
+        ? [Math.log10(minValue), Math.log10(maxValue)]
+        : [minValue, maxValue];
     }
 
     function drawGeneral(showToastOnDone = true) {

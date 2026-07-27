@@ -58,6 +58,8 @@ qPCR 탭은 장비에서 export한 raw table을 받아 relative expression 그�
 
 QuantStudio `Sample Results`의 `-B1`, `-B2`, `-B3` suffix는 biological replicate로 사용합니다. Technical replicate는 cycle mean에 이미 요약된 것으로 처리합니다. `Biogroup Results`는 QuantStudio가 계산한 `Rq`, `Rq Min`, `Rq Max`를 aggregate 그래프로 표시하지만, replicate가 이미 합쳐진 summary이므로 biological replicate dot이나 SD/SEM 계산에는 사용할 수 없습니다.
 
+qPCR Figure 설정에서 Y축 최소값과 최대값을 직접 지정할 수 있습니다. 두 값을 비우면 자동 범위로 돌아갑니다. Biogroup Results의 장비 신뢰구간이 지나치게 넓을 때는 오차막대를 `없음`으로 바꿔 Rq 막대만 확인할 수 있습니다.
+
 계산은 comparative Cq 방식인 `2^-ΔΔCq`를 사용합니다. 이 방식은 target/reference assay의 증폭 효율이 충분히 유사하다는 가정이 필요합니다. 효율 차이가 큰 assay에는 efficiency-corrected 분석을 사용해야 합니다.
 
 - Livak & Schmittgen, 2001: <https://pubmed.ncbi.nlm.nih.gov/11846609/>

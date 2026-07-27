@@ -545,6 +545,7 @@
       notes: [
         "Input: QuantStudio Biogroup Results",
         "QuantStudio가 계산한 Rq 값을 그대로 사용하며 2^-ΔΔCq를 다시 계산하지 않습니다.",
+        "Biogroup Rq는 aggregate mean Cq에서 계산된 값이므로 Sample Results의 BioRep별 RE 산술평균과 다를 수 있습니다.",
         `Rq Min/Rq Max는 export에 포함된 ${intervalLabel}으로 표시합니다.`,
         "Biological replicate가 이미 합쳐진 aggregate이므로 개별 BioRep 점과 SD/SEM은 만들 수 없습니다. 반복점이 필요하면 Sample Results를 사용하세요."
       ]
