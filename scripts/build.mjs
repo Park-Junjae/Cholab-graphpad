@@ -15,7 +15,14 @@ const chunkSize = 4000;
 
 await mkdir(payloadDir, { recursive: true });
 
-const sourceHtml = await readFile(sourceHtmlPath);
+const sourceHtmlTemplate = await readFile(sourceHtmlPath, "utf8");
+const sourceCore = await readFile(sourceCorePath);
+const coreDigest = createHash("sha256").update(sourceCore).digest("hex").slice(0, 12);
+const sourceHtmlText = sourceHtmlTemplate.replaceAll("__QPCR_CORE_VERSION__", coreDigest);
+if (sourceHtmlText === sourceHtmlTemplate) {
+  throw new Error("src/index.html에 __QPCR_CORE_VERSION__ placeholder가 없습니다.");
+}
+const sourceHtml = Buffer.from(sourceHtmlText, "utf8");
 const compressed = gzipSync(sourceHtml, { level: 9, mtime: 0 });
 const encoded = compressed.toString("base64");
 const chunks = [];

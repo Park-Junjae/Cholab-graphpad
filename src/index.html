@@ -5,7 +5,7 @@
   <title>Cholab GraphPad</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-  <script src="qpcr-core.js?v=quantstudio-20260727"></script>
+  <script src="qpcr-core.js?v=__QPCR_CORE_VERSION__"></script>
   <style>
     :root {
       color-scheme: light;
@@ -2476,14 +2476,7 @@
           }
         } else {
           const text = await file.text();
-          if (target === "general") {
-            setGeneralRows(parseDelimited(text), file.name);
-          } else if (window.CholabQpcrCore) {
-            const parsed = CholabQpcrCore.parseDelimited(text);
-            setQpcrRows(parsed.rows, file.name, parsed.metadata);
-          } else {
-            setQpcrRows(parseDelimited(text), file.name, {});
-          }
+          importDelimitedText(text, target, file.name);
         }
       } catch (error) {
         showToast(error.message || String(error));
@@ -2554,17 +2547,29 @@
     }
 
     function parseQpcrPaste() {
-      if (window.CholabQpcrCore) {
-        const parsed = CholabQpcrCore.parseDelimited($("qpcrPaste").value);
-        setQpcrRows(parsed.rows, "pasted qPCR table", parsed.metadata);
-      } else {
-        setQpcrRows(parseDelimited($("qpcrPaste").value), "pasted qPCR table", {});
-      }
+      importDelimitedText($("qpcrPaste").value, "qpcr", "pasted qPCR table");
     }
 
     function parseGeneralPaste() {
-      const rows = parseDelimited($("generalPaste").value);
-      setGeneralRows(rows, "pasted table");
+      importDelimitedText($("generalPaste").value, "general", "pasted table");
+    }
+
+    function importDelimitedText(text, target, sourceName) {
+      const parsed = window.CholabQpcrCore
+        ? CholabQpcrCore.parseDelimited(text)
+        : { rows: parseDelimited(text), metadata: {} };
+      if (target === "qpcr") {
+        setQpcrRows(parsed.rows, sourceName, parsed.metadata);
+        return;
+      }
+      const detected = detectQpcrInput(parsed.rows, "auto");
+      if (detected.mode !== "unknown") {
+        setQpcrRows(parsed.rows, sourceName, parsed.metadata);
+        activatePane("qpcrPane");
+        showToast(`${qpcrInputModeLabel(detected.mode)} 형식을 감지해 qPCR 탭으로 이동했습니다.`);
+        return;
+      }
+      setGeneralRows(parsed.rows, sourceName);
     }
 
     function worksheetToRows(sheet, sheetName = "Sheet") {
@@ -3452,6 +3457,20 @@
         return;
       }
       try {
+        const requestedCycle = $("qpcrCycleColumn").value || state.qpcrCycleColumn || "auto";
+        const detected = detectQpcrInput(state.qpcrRows, requestedCycle);
+        if (detected.mode === "unknown") {
+          const columns = getColumns(state.qpcrRows).slice(0, 12).join(", ");
+          throw new Error(
+            `qPCR 필수 컬럼을 찾지 못했습니다. Sample/Target/Ct·Cq 헤더를 확인하세요. 감지된 컬럼: ${columns || "(없음)"}`
+          );
+        }
+        state.qpcrInputMode = detected.mode;
+        state.qpcrAvailableCycleColumns = detected.mapping?.availableCycleColumns || [];
+        state.qpcrCycleColumn = detected.mapping?.cycle || "";
+        renderQpcrCycleOptions();
+        configureQpcrInputMode();
+        updateQpcrSelectors();
         const repMode = document.querySelector("input[name='qpcrRepMode']:checked").value;
         if (state.qpcrInputMode === "quantstudio_biogroup_results") {
           throw new Error(
