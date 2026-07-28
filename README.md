@@ -1,5 +1,9 @@
 # Cholab GraphPad
 
+<p align="center">
+  <img src="docs/assets/cholab-graphpad.png" alt="Cholab GraphPad qPCR analysis and figure preview" width="1200">
+</p>
+
 ## 바로 실행
 
 [Cholab GraphPad 열기](https://Park-Junjae.github.io/Cholab-graphpad/)
@@ -7,6 +11,12 @@
 위 링크를 누르면 설치 없이 브라우저에서 바로 열립니다.
 
 Cholab GraphPad는 일반 실험 데이터를 우선으로 자동 인식해 그래프를 추천하고, 필요할 때 qPCR raw data까지 분석할 수 있는 정적 웹앱입니다. 별도 설치 없이 GitHub Pages 링크를 브라우저로 열어 사용합니다.
+
+## 데이터 처리
+
+선택한 실험 파일은 브라우저 메모리에서 읽고 계산합니다. 앱 자체에는 로컬 파일을 분석 서버로 업로드하는 코드가 없습니다.
+
+현재 공개 페이지는 SheetJS와 Plotly를 외부 CDN에서 불러오므로 처음 열 때 인터넷 연결이 필요합니다. 공개 전 검토가 필요한 제한 데이터에는 기관의 데이터 취급 정책을 우선 적용하세요.
 
 ## 빠른 시작
 

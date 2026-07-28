@@ -6,6 +6,9 @@
 !.nojekyll
 !package.json
 !qpcr-core.js
+!docs/
+!docs/assets/
+!docs/assets/*.png
 !payload/
 !payload/*.js
 !scripts/
