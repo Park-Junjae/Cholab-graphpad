@@ -2376,7 +2376,7 @@
       $("sheetSelect").addEventListener("change", () => useWorkbookSheet($("sheetSelect").value));
       $("qpcrCycleColumn").addEventListener("change", () => {
         state.qpcrCycleColumn = $("qpcrCycleColumn").value;
-        updateQpcrSelectors();
+        updateQpcrSelectors({ preserveSelection: true });
         if (state.qpcrRows.length) {
           const label = state.qpcrCycleColumn || "자동";
           setStatus("qpcrStatus", `${state.qpcrRows.length} rows · cycle column: ${label}`, "ok");
@@ -2866,7 +2866,7 @@
         : (state.qpcrCycleColumn ? ` · calculation value: ${state.qpcrCycleColumn}` : "");
       const statusClass = state.qpcrInputMode === "unknown" || state.qpcrInputMode === "quantstudio_biogroup_results" ? "warn" : "ok";
       setStatus("qpcrStatus", `${sourceName}: ${state.qpcrRows.length} rows · ${formatLabel}${cycleLabel}`, state.qpcrRows.length ? statusClass : "");
-      updateQpcrSelectors();
+      updateQpcrSelectors({ preserveSelection: false });
       renderTable(state.qpcrRows.slice(0, 20), "qPCR 원본 데이터 미리보기");
     }
 
@@ -3098,7 +3098,9 @@
       return [...seen];
     }
 
-    function updateQpcrSelectors() {
+    function updateQpcrSelectors({ preserveSelection = false } = {}) {
+      const selectedReference = $("refGene").value;
+      const selectedCalibrator = $("calibratorSample").value;
       const mapping = detectQpcrColumns(state.qpcrRows);
       const targets = orderedUnique(state.qpcrRows.map((r) => value(r, mapping.target)).filter(Boolean));
       const isBiogroup = state.qpcrInputMode === "quantstudio_biogroup_results";
@@ -3118,14 +3120,18 @@
       fillSelect(
         "refGene",
         targets,
-        firstPreferred(targets, [metadataRef, "GAPDH", "ACTB", "18S", "RPLP0", "HPRT1"].filter(Boolean))
+        preserveSelection && targets.includes(selectedReference)
+          ? selectedReference
+          : firstPreferred(targets, [metadataRef, "GAPDH", "ACTB", "18S", "RPLP0", "HPRT1"].filter(Boolean))
       );
       fillSelect(
         "calibratorSample",
         calibratorOptions,
-        firstPreferred(calibratorOptions, [metadataCalibrator, "HELA", "Control", "CTRL", "WT"].filter(Boolean))
+        preserveSelection && calibratorOptions.includes(selectedCalibrator)
+          ? selectedCalibrator
+          : firstPreferred(calibratorOptions, [metadataCalibrator, "HELA", "Control", "CTRL", "WT"].filter(Boolean))
       );
-      if (sampleResultsMode || isBiogroup) {
+      if (!preserveSelection && (sampleResultsMode || isBiogroup)) {
         const autoExcluded = calibratorOptions.filter((sample) =>
           /^nc(?:[-_ ]|$)/i.test(sample) || DEFAULT_EXCLUDES.some((item) => normalize(item) === normalize(sample))
         );
@@ -3551,7 +3557,7 @@
         state.qpcrCycleColumn = detected.mapping?.cycle || "";
         renderQpcrCycleOptions();
         configureQpcrInputMode();
-        updateQpcrSelectors();
+        updateQpcrSelectors({ preserveSelection: true });
         const repMode = document.querySelector("input[name='qpcrRepMode']:checked").value;
         state.qpcrResult = state.qpcrInputMode === "quantstudio_biogroup_results"
           ? analyzeQpcrBiogroupResults(state.qpcrRows)

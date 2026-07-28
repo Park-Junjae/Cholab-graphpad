@@ -68,6 +68,28 @@ test("Sample Results calculate biological-replicate delta-delta Cq", () => {
   assert.equal(treat["SEM RE"], 0);
 });
 
+test("changing the calibrator changes relative expression", () => {
+  const parsed = core.parseDelimited(fixture);
+  const ctrlResult = core.analyzeSampleResults(parsed.rows, {
+    referenceGene: "GAPDH",
+    calibratorSample: "CTRL",
+    cycleColumn: "Mean Adjusted Equivalent Cq",
+    expectedBioReps: 3
+  });
+  const treatResult = core.analyzeSampleResults(parsed.rows, {
+    referenceGene: "GAPDH",
+    calibratorSample: "TREAT",
+    cycleColumn: "Mean Adjusted Equivalent Cq",
+    expectedBioReps: 3
+  });
+  const ctrlWithCtrlCalibrator = ctrlResult.summary.find((row) => row.Target === "GENE1" && row.Sample === "CTRL");
+  const ctrlWithTreatCalibrator = treatResult.summary.find((row) => row.Target === "GENE1" && row.Sample === "CTRL");
+  const treatWithTreatCalibrator = treatResult.summary.find((row) => row.Target === "GENE1" && row.Sample === "TREAT");
+  assert.equal(ctrlWithCtrlCalibrator["Mean RE"], 1);
+  assert.equal(ctrlWithTreatCalibrator["Mean RE"], 0.5);
+  assert.equal(treatWithTreatCalibrator["Mean RE"], 1);
+});
+
 test("Biogroup Results is rejected by the replicate-dot calculation", () => {
   const rows = [{ "Bio Group Name": "CTRL", "Target Name": "GENE1", Rq: "1" }];
   assert.throws(
